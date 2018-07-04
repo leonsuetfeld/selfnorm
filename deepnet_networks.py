@@ -256,18 +256,18 @@ class Network(object):
     # SIMPLE MODULAR CONV NET (WITH BATCH NORMALIZATION)
     def __smcnBN(self, namescope=None):
         # input block
-        self.state = self.__conv2d_layer(layer_input=self.Xp, W_shape=[5,5,3,64], bias_init=0.0, batch_norm=True, reuse=self.reuse, varscope=namescope+'/conv1')
-        self.state = self.__conv2d_layer(layer_input=self.state, W_shape=[3,3,64,64], batch_norm=True, reuse=self.reuse, varscope=namescope+'/conv2')
+        self.state = self.__conv2d_layer(layer_input=self.Xp, W_shape=[5,5,3,64], b_shape=[0], bias_init=0.0, batch_norm=True, reuse=self.reuse, varscope=namescope+'/conv1')
+        self.state = self.__conv2d_layer(layer_input=self.state, W_shape=[3,3,64,64], b_shape=[0], batch_norm=True, reuse=self.reuse, varscope=namescope+'/conv2')
         # pooling layer
         self.state = tf.nn.max_pool(self.state, ksize=[1,3,3,1], strides=[1,2,2,1], padding='SAME', name=namescope+'/pool2')
         # standard block
-        self.state = self.__conv2d_layer(layer_input=self.state, W_shape=[1,1,64,64], batch_norm=True, reuse=self.reuse, varscope=namescope+'/conv3')
-        self.state = self.__conv2d_layer(layer_input=self.state, W_shape=[5,5,64,64], batch_norm=True, reuse=self.reuse, varscope=namescope+'/conv4')
+        self.state = self.__conv2d_layer(layer_input=self.state, W_shape=[1,1,64,64], b_shape=[0], batch_norm=True, reuse=self.reuse, varscope=namescope+'/conv3')
+        self.state = self.__conv2d_layer(layer_input=self.state, W_shape=[5,5,64,64], b_shape=[0], batch_norm=True, reuse=self.reuse, varscope=namescope+'/conv4')
         # pooling layer
         self.state = tf.nn.max_pool(self.state, ksize=[1,3,3,1], strides=[1,2,2,1], padding='SAME', name=namescope+'/pool4')
         # output block
-        self.state = self.__dense_layer(layer_input=self.state, W_shape=[384], batch_norm=True, reuse=self.reuse, varscope=namescope+'/dense5')
-        self.state = self.__dense_layer(layer_input=self.state, W_shape=[192], batch_norm=True, reuse=self.reuse, varscope=namescope+'/dense6')
+        self.state = self.__dense_layer(layer_input=self.state, W_shape=[384], b_shape=[0], batch_norm=True, reuse=self.reuse, varscope=namescope+'/dense5')
+        self.state = self.__dense_layer(layer_input=self.state, W_shape=[192], b_shape=[0], batch_norm=True, reuse=self.reuse, varscope=namescope+'/dense6')
         # output layer
         self.logits = self.__dense_layer(layer_input=self.state, W_shape=[self.NetSettings.logit_dims], batch_norm=False, skip_af=True, reuse=self.reuse, varscope=namescope+'/denseout')
         return self.logits
@@ -326,71 +326,111 @@ class Network(object):
             self.__variable_summaries(beta, 'beta', stats=['mean'])
             preact = alpha * (preact + beta)
 
+        # ACTIVATION FUNCTIONS
         if skip_af:
             activation = preact
-        else:
-            # ACTIVATION FUNCTIONS
-            if self.NetSettings.activation_function == 'relu':
-                activation = tf.nn.relu(preact)
-            elif self.NetSettings.activation_function == 'elu':
-                activation = tf.nn.elu(preact)
-            elif self.NetSettings.activation_function == 'tanh':
-                activation = tf.nn.tanh(preact)
-            elif self.NetSettings.activation_function == 'swish':
+        elif self.NetSettings.activation_function == 'relu':
+            activation = tf.nn.relu(preact)
+        elif self.NetSettings.activation_function == 'elu':
+            activation = tf.nn.elu(preact)
+        elif self.NetSettings.activation_function == 'tanh':
+            activation = tf.nn.tanh(preact)
+        elif self.NetSettings.activation_function == 'swish':
+            if self.NetSettings.af_weights_pretrained:
+                swish_beta_init = self.__get_predefined_af_weights(layer_name, w_type='swish_beta')
+            else:
+                swish_beta_init = tf.fill([1], 1.0)
+            swish_beta = tf.get_variable("swish_beta", trainable=self.NetSettings.swish_beta_trainable, initializer=swish_beta_init)
+            self.__variable_summaries(swish_beta, 'swish_beta', stats=['mean'])
+            activation = preact * tf.nn.sigmoid(swish_beta*preact)
+        elif self.NetSettings.activation_function == 'id':
+            activation = preact
+        elif self.NetSettings.activation_function == 'selu':
+            activation = tf.nn.selu(preact)
+        elif self.NetSettings.activation_function == 'ABU':
+            # INITIALIZE BLENDING WEIGHTS & SWISH BETA
+            if self.NetSettings.af_weights_pretrained:
+                blending_weights_initializer = self.__get_predefined_af_weights(layer_name, w_type='blend')
+                swish_beta_init = self.__get_predefined_af_weights(layer_name, w_type='swish_beta')
+            else:
+                blending_weights_initializer = tf.fill([5], 1/5.0)
+                swish_beta_init = tf.fill([1], 1.0)
+            blending_weights_raw = tf.get_variable("blending_weights_raw", trainable=self.NetSettings.ABU_trainable, initializer=blending_weights_initializer)
+            swish_beta = tf.get_variable("swish_beta", trainable=self.NetSettings.swish_beta_trainable, initializer=swish_beta_init)
+            self.__variable_summaries(blending_weights_raw, 'blending_weights', stats=['mean', 'min', 'max'])
+            self.__variable_summaries(swish_beta, 'swish_beta', stats=['mean'])
+            # NORMALIZE
+            if self.NetSettings.ABU_normalization == 'unrestricted':
+                blending_weights = blending_weights_raw
+            elif self.NetSettings.ABU_normalization == 'normalized':
+                blending_weights = tf.divide(blending_weights_raw, tf.reduce_sum(blending_weights_raw, keep_dims=True))
+            elif self.NetSettings.ABU_normalization == 'absnormed':
+                blending_weights = tf.divide(blending_weights_raw, tf.reduce_sum(tf.abs(blending_weights_raw), keep_dims=True))
+            elif self.NetSettings.ABU_normalization == 'posnormed':
+                blending_weights = tf.divide(tf.clip_by_value(blending_weights_raw, 0.0001, 1000.0), tf.reduce_sum(tf.clip_by_value(blending_weights_raw, 0.0001, 1000.0), keep_dims=True))
+                blending_weights = tf.divide(blending_weights_raw, tf.reduce_sum(blending_weights_raw, keep_dims=True))
+            elif self.NetSettings.ABU_normalization == 'softmaxed':
+                blending_weights = tf.exp(blending_weights_raw)
+                blending_weights = tf.divide(blending_weights, tf.reduce_sum(blending_weights, keep_dims=True))
+            # ACTIVATE
+            act_relu = tf.nn.relu(preact)
+            act_elu = tf.nn.elu(preact)
+            act_tanh = tf.nn.tanh(preact)
+            act_swish = preact * tf.nn.sigmoid(swish_beta*preact)
+            act_id = preact
+            activation = tf.add_n([blending_weights[0] * act_relu,
+                                   blending_weights[1] * act_elu,
+                                   blending_weights[2] * act_tanh,
+                                   blending_weights[3] * act_swish,
+                                   blending_weights[4] * act_id])
+        # custom ABU
+        elif self.NetSettings.activation_function.startswith('ABU-'):
+            # ABUs with different sets of AFs. e.g. "ABU-relu-tanh-swish"
+            n_AFs = len(self.NetSettings.activation_function.split('-'))-1
+            AF_list = self.NetSettings.activation_function.split('-')[1:]
+            # INITIALIZE SWISH BETA IF APPLICABLE
+            if 'swish' in AF_list:
                 if self.NetSettings.af_weights_pretrained:
                     swish_beta_init = self.__get_predefined_af_weights(layer_name, w_type='swish_beta')
                 else:
                     swish_beta_init = tf.fill([1], 1.0)
                 swish_beta = tf.get_variable("swish_beta", trainable=self.NetSettings.swish_beta_trainable, initializer=swish_beta_init)
                 self.__variable_summaries(swish_beta, 'swish_beta', stats=['mean'])
-                activation = preact * tf.nn.sigmoid(swish_beta*preact)
-            elif self.NetSettings.activation_function == 'id':
-                activation = preact
-            elif self.NetSettings.activation_function == 'selu':
-                activation = tf.nn.selu(preact)
-            elif self.NetSettings.activation_function == 'ABU':
-                # INITIALIZE BLENDING WEIGHTS & SWISH BETA
-                if self.NetSettings.af_weights_pretrained:
-                    blending_weights_initializer = self.__get_predefined_af_weights(layer_name, w_type='blend')
-                    swish_beta_init = self.__get_predefined_af_weights(layer_name, w_type='swish_beta')
-                else:
-                    blending_weights_initializer = tf.fill([5], 1/5.0)
-                    swish_beta_init = tf.fill([1], 1.0)
-                blending_weights_raw = tf.get_variable("blending_weights_raw", trainable=self.NetSettings.ABU_trainable, initializer=blending_weights_initializer)
-                swish_beta = tf.get_variable("swish_beta", trainable=self.NetSettings.swish_beta_trainable, initializer=swish_beta_init)
-                self.__variable_summaries(blending_weights_raw, 'blending_weights', stats=['mean', 'min', 'max'])
-                self.__variable_summaries(swish_beta, 'swish_beta', stats=['mean'])
-                # NORMALIZE
-                if self.NetSettings.ABU_normalization == 'unrestricted':
-                    blending_weights = blending_weights_raw
-                elif self.NetSettings.ABU_normalization == 'normalized':
-                    blending_weights = tf.divide(blending_weights_raw, tf.reduce_sum(blending_weights_raw, keep_dims=True))
-                elif self.NetSettings.ABU_normalization == 'absnormed':
-                    blending_weights = tf.divide(blending_weights_raw, tf.reduce_sum(tf.abs(blending_weights_raw), keep_dims=True))
-                elif self.NetSettings.ABU_normalization == 'posnormed':
-                    blending_weights = tf.divide(tf.clip_by_value(blending_weights_raw, 0.0001, 1000.0), tf.reduce_sum(tf.clip_by_value(blending_weights_raw, 0.0001, 1000.0), keep_dims=True))
-                    blending_weights = tf.divide(blending_weights_raw, tf.reduce_sum(blending_weights_raw, keep_dims=True))
-                elif self.NetSettings.ABU_normalization == 'softmaxed':
-                    blending_weights = tf.exp(blending_weights_raw)
-                    blending_weights = tf.divide(blending_weights, tf.reduce_sum(blending_weights, keep_dims=True))
-                # ACTIVATE
-                act_relu = tf.nn.relu(preact)
-                act_elu = tf.nn.elu(preact)
-                act_tanh = tf.nn.tanh(preact)
-                act_swish = preact * tf.nn.sigmoid(swish_beta*preact)
-                act_linu = preact
-                if batch_norm:
-                    act_relu = tf.layers.batch_normalization(act_relu, name='batchnorm_relu', training=True)
-                    act_elu = tf.layers.batch_normalization(act_elu, name='batchnorm_elu', training=True)
-                    act_tanh = tf.layers.batch_normalization(act_tanh, name='batchnorm_tanh', training=True)
-                    act_swish = tf.layers.batch_normalization(act_swish, name='batchnorm_swish', training=True)
-                    act_linu = tf.layers.batch_normalization(act_linu, name='batchnorm_linu', training=True)
-                activation = tf.add_n([blending_weights[0] * act_relu,
-                                       blending_weights[1] * act_elu,
-                                       blending_weights[2] * act_tanh,
-                                       blending_weights[3] * act_swish,
-                                       blending_weights[4] * act_linu])
-
+            # INITIALIZE BLENDING WEIGHTS
+            if self.NetSettings.af_weights_pretrained:
+                blending_weights_initializer = self.__get_predefined_af_weights(layer_name, w_type='blend')
+            else:
+                blending_weights_initializer = tf.fill([n_AFs], 1/float(n_AFs))
+            blending_weights_raw = tf.get_variable("blending_weights_raw", trainable=self.NetSettings.ABU_trainable, initializer=blending_weights_initializer)
+            self.__variable_summaries(blending_weights_raw, 'blending_weights', stats=['mean', 'min', 'max'])
+            # NORMALIZE
+            if self.NetSettings.ABU_normalization == 'unrestricted':
+                blending_weights = blending_weights_raw
+            elif self.NetSettings.ABU_normalization == 'normalized':
+                blending_weights = tf.divide(blending_weights_raw, tf.reduce_sum(blending_weights_raw, keep_dims=True))
+            elif self.NetSettings.ABU_normalization == 'absnormed':
+                blending_weights = tf.divide(blending_weights_raw, tf.reduce_sum(tf.abs(blending_weights_raw), keep_dims=True))
+            elif self.NetSettings.ABU_normalization == 'posnormed':
+                blending_weights = tf.divide(tf.clip_by_value(blending_weights_raw, 0.0001, 1000.0), tf.reduce_sum(tf.clip_by_value(blending_weights_raw, 0.0001, 1000.0), keep_dims=True))
+                blending_weights = tf.divide(blending_weights_raw, tf.reduce_sum(blending_weights_raw, keep_dims=True))
+            elif self.NetSettings.ABU_normalization == 'softmaxed':
+                blending_weights = tf.exp(blending_weights_raw)
+                blending_weights = tf.divide(blending_weights, tf.reduce_sum(blending_weights, keep_dims=True))
+            # ACTIVATE
+            activations = []
+            for i, AF in enumerate(AF_list):
+                assert AF in ['id', 'tanh', 'relu', 'elu', 'swish'], 'requested activation function unknown: %s' %(AF)
+                if AF == 'id':
+                    activations.append(blending_weights[i] * preact)
+                elif AF == 'tanh':
+                    activations.append(blending_weights[i] * tf.nn.tanh(preact))
+                elif AF == 'relu':
+                    activations.append(blending_weights[i] * tf.nn.relu(preact))
+                elif AF == 'elu':
+                    activations.append(blending_weights[i] * tf.nn.elu(preact))
+                elif AF == 'swish':
+                    activations.append(blending_weights[i] * preact * tf.nn.sigmoid(swish_beta*preact))
+            activation = tf.add_n(activations)
         self.__variable_summaries(activation, 'activation', stats=['mean', 'std', 'hist'])
         return activation
 

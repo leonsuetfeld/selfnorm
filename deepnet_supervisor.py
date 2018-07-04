@@ -14,9 +14,9 @@ for run in range(1):
     os.system("nvidia-smi")
     command = "python3 "                        + 'deepnet_main.py' + \
               " -path_relative "                + './' + \
-              " -experiment_name "              + 'first_test' + \
-              " -spec_name "                    + 'relu_learned_normalized' + \
-              " -run "                          + '1' + \
+              " -experiment_name "              + 'ABU_flex_test' + \
+              " -spec_name "                    + 'ABU-swish-tanh-id' + \
+              " -run "                          + '2' + \
               " -task="                         + 'cifar10' + \
               " -preprocessing="                + 'ztrans' +\
               " -network="                      + 'smcn' + \
@@ -38,15 +38,15 @@ for run in range(1):
               " -create_val_set "               + 'True' + \
               " -val_set_fraction "             + '0.05' + \
               " -learn_layer_stats "            + 'True' +\
-              " -activation_function "          + 'relu' +\
+              " -activation_function "          + 'ABU-swish-tanh-id' +\
               " -af_weights_pretrained "        + 'False' + \
               " -load_af_weights_from "         + 'none' + \
               " -norm_blendw_at_init "          + 'False' + \
               " -safe_af_ws_n "                 + '10' + \
               " -safe_all_ws_n "                + '2' + \
-              " -ABU_trainable "                + 'False' + \
+              " -ABU_trainable "                + 'True' + \
               " -ABU_normalization "            + 'unrestricted' + \
-              " -swish_beta_trainable "         + 'False' + \
+              " -swish_beta_trainable "         + 'True' + \
               " -walltime "                     + '1000.0' + \
               " -create_checkpoints "           + 'True' + \
               " -epochs_between_checkpoints "   + '3' + \
