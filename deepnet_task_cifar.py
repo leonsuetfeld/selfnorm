@@ -1598,7 +1598,7 @@ def __spec_analysis(TaskSettings, Paths, spec_name, spec_path, axis_2='af_weight
                             'v_loss_std_run': v_loss_std_run,
                             'v_loss_var_run': v_loss_var_run,
                             # var acc main
-                            'v_top1_run_max_list': v_run_max_list,     # all runs' max values
+                            'v_top1_run_max_list': v_run_max_list, # all runs' max values
                             'v_top1_run_max_median': np.median(v_run_max_list),
                             'v_top1_run_max_max': np.max(v_run_max_list),
                             'v_top1_run_max_min': np.min(v_run_max_list),
