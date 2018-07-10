@@ -1305,9 +1305,9 @@ def analysis(TaskSettings, Paths, make_plot=True, make_hrtf=True):
     # put the pieces together and call __spec_analysis() for each spec of the experiment
     spec_name_list, n_runs_list, mb_list, test_earlys_mb_mean, test_earlys_mb_std = [], [], [], [], []
     median_run_per_spec, best_run_per_spec, mean_run_per_spec, worst_run_per_spec, std_per_spec = [], [], [], [], []
-    t_min_per_spec, t_max_per_spec, t_median_per_spec, t_mean_per_spec, t_var_per_spec, t_std_per_spec = [], [], [], [], [], []
-    v_min_per_spec, v_max_per_spec, v_median_per_spec, v_mean_per_spec, v_var_per_spec, v_std_per_spec = [], [], [], [], [], []
-    test_min_per_spec, test_max_per_spec, test_median_per_spec, test_mean_per_spec, test_var_per_spec, test_std_per_spec = [], [], [], [], [], []
+    t_min_per_spec, t_max_per_spec, t_median_per_spec, t_mean_per_spec, t_var_per_spec, t_std_per_spec, t_standard_error = [], [], [], [], [], [], []
+    v_min_per_spec, v_max_per_spec, v_median_per_spec, v_mean_per_spec, v_var_per_spec, v_std_per_spec, v_standard_error = [], [], [], [], [], [], []
+    test_min_per_spec, test_max_per_spec, test_median_per_spec, test_mean_per_spec, test_var_per_spec, test_std_per_spec, test_standard_error = [], [], [], [], [], [], []
     print('')
     print('================================================================================================================================================================================================================')
     spec_list_filtered = [] # will only contain specs that actually have completed runs
@@ -1335,18 +1335,21 @@ def analysis(TaskSettings, Paths, make_plot=True, make_hrtf=True):
             t_median_per_spec.append(spec_perf_dict['t_top1_run_max_median'])
             t_var_per_spec.append(spec_perf_dict['t_top1_run_max_var'])
             t_std_per_spec.append(spec_perf_dict['t_top1_run_max_std'])
+            t_standard_error.append(spec_perf_dict['t_top1_standard_error'])
             v_min_per_spec.append(spec_perf_dict['v_top1_run_max_min'])
             v_max_per_spec.append(spec_perf_dict['v_top1_run_max_max'])
             v_mean_per_spec.append(spec_perf_dict['v_top1_run_max_mean'])
             v_median_per_spec.append(spec_perf_dict['v_top1_run_max_median'])
             v_var_per_spec.append(spec_perf_dict['v_top1_run_max_var'])
             v_std_per_spec.append(spec_perf_dict['v_top1_run_max_std'])
+            v_standard_error.append(spec_perf_dict['v_top1_standard_error'])
             test_min_per_spec.append(spec_perf_dict['test_top1_min'])
             test_max_per_spec.append(spec_perf_dict['test_top1_max'])
             test_mean_per_spec.append(spec_perf_dict['test_top1_mean'])
             test_median_per_spec.append(spec_perf_dict['test_top1_median'])
             test_var_per_spec.append(spec_perf_dict['test_top1_var'])
             test_std_per_spec.append(spec_perf_dict['test_top1_std'])
+            test_standard_error.append(spec_perf_dict['test_top1_standard_error'])
         print('[MESSAGE] spec analysis complete:', spec_name)
     print('================================================================================================================================================================================================================')
 
@@ -1392,15 +1395,57 @@ def analysis(TaskSettings, Paths, make_plot=True, make_hrtf=True):
         hrtf_filename = 'main_performance_analysis.csv'
         with open(savepath+hrtf_filename, 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow(['spec_name','n_runs', 'test / e.s. mb [mean]', 'test / e.s. mb [std]',
-                             'train acc [median]','train acc [mean]','train acc [var]','train acc [std]','train acc [max]','train acc [min]',
-                             'val acc [median]','val acc [mean]','val acc [var]','val acc [std]','val acc [max]','val acc [min]',
-                             'test acc [median]','test acc [mean]','test acc [var]','test acc [std]','test acc [max]','test acc [min]'])
+            writer.writerow([experiment_name,
+                             'n_runs',
+                             'test acc [mean %]',
+                             'test acc [stderr %]',
+                             'test acc [std %]',
+                             'test acc [var %]',
+                             'test acc [median %]',
+                             'test acc [max %]',
+                             'test acc [min %]',
+                             'val acc [mean %]',
+                             'val acc [stderr %]',
+                             'val acc [std %]',
+                             'val acc [var %]',
+                             'val acc [median %]',
+                             'val acc [max %]',
+                             'val acc [min %]',
+                             'train acc [mean %]',
+                             'train acc [stderr %]',
+                             'train acc [std %]',
+                             'train acc [var %]',
+                             'train acc [median %]',
+                             'train acc [max %]',
+                             'train acc [min %]',
+                             'test / e.s. mb [mean]',
+                             'test / e.s. mb [std]'])
             for spec in range(len(spec_name_list)):
-                writer.writerow([spec_name_list[spec], n_runs_list[spec], test_earlys_mb_mean[spec], test_earlys_mb_std[spec],
-                                t_median_per_spec[spec], t_mean_per_spec[spec], t_var_per_spec[spec], t_std_per_spec[spec], t_max_per_spec[spec], t_min_per_spec[spec],
-                                v_median_per_spec[spec], v_mean_per_spec[spec], v_var_per_spec[spec], v_std_per_spec[spec], v_max_per_spec[spec], v_min_per_spec[spec],
-                                test_median_per_spec[spec], test_mean_per_spec[spec], test_var_per_spec[spec], test_std_per_spec[spec], test_max_per_spec[spec], test_min_per_spec[spec]])
+                writer.writerow([spec_name_list[spec],
+                                 n_runs_list[spec],
+                                 test_mean_per_spec[spec]*100,
+                                 test_standard_error[spec]*100,
+                                 test_std_per_spec[spec]*100,
+                                 test_var_per_spec[spec]*100,
+                                 test_median_per_spec[spec]*100,
+                                 test_max_per_spec[spec]*100,
+                                 test_min_per_spec[spec]*100,
+                                 v_mean_per_spec[spec]*100,
+                                 v_standard_error[spec]*100,
+                                 v_std_per_spec[spec]*100,
+                                 v_var_per_spec[spec]*100,
+                                 v_median_per_spec[spec]*100,
+                                 v_max_per_spec[spec]*100,
+                                 v_min_per_spec[spec]*100,
+                                 t_mean_per_spec[spec]*100,
+                                 t_standard_error[spec]*100,
+                                 t_std_per_spec[spec]*100,
+                                 t_var_per_spec[spec]*100,
+                                 t_median_per_spec[spec]*100,
+                                 t_max_per_spec[spec]*100,
+                                 t_min_per_spec[spec]*100,
+                                 test_earlys_mb_mean[spec],
+                                 test_earlys_mb_std[spec]])
         print('[MESSAGE] file saved: %s (performance analysis csv for experiment "%s")' %(savepath+hrtf_filename, experiment_name))
 
 def __spec_analysis(TaskSettings, Paths, spec_name, spec_path, axis_2='af_weights', make_plot=False, return_loss=False):
@@ -1524,8 +1569,9 @@ def __spec_analysis(TaskSettings, Paths, spec_name, spec_path, axis_2='af_weight
                             't_top1_run_max_max': np.max(t_run_max_list),
                             't_top1_run_max_min': np.min(t_run_max_list),
                             't_top1_run_max_mean': np.mean(t_run_max_list),
-                            't_top1_run_max_std': np.std(t_run_max_list),
                             't_top1_run_max_var': np.var(t_run_max_list),
+                            't_top1_run_max_std': np.std(t_run_max_list),
+                            't_top1_standard_error': np.std(t_run_max_list)/np.sqrt(n_runs), # standard error of the mean (SEM)
                             # training acc full runs for plotting
                             't_top1_median_run': t_median_run,
                             't_top1_himax_run': t_himax_run,
@@ -1533,6 +1579,7 @@ def __spec_analysis(TaskSettings, Paths, spec_name, spec_path, axis_2='af_weight
                             't_top1_mean_run': t_mean_run,
                             't_top1_std_run': t_std_run,
                             't_top1_var_run': t_var_run,
+                            't_top1_standard_error': t_std_run/np.sqrt(n_runs), # standard error of the mean (SEM)
 
                             # val loss main
                             'v_mb': v_mb, # training minibatch numbers corresponding to validation runs
@@ -1556,15 +1603,16 @@ def __spec_analysis(TaskSettings, Paths, spec_name, spec_path, axis_2='af_weight
                             'v_top1_run_max_max': np.max(v_run_max_list),
                             'v_top1_run_max_min': np.min(v_run_max_list),
                             'v_top1_run_max_mean': np.mean(v_run_max_list),
-                            'v_top1_run_max_std': np.std(v_run_max_list),
                             'v_top1_run_max_var': np.var(v_run_max_list),
+                            'v_top1_run_max_std': np.std(v_run_max_list),
+                            'v_top1_standard_error': np.std(v_run_max_list)/np.sqrt(n_runs), # standard error of the mean (SEM)
                             # val acc full runs for plotting
-                            'v_top1_median_run': v_median_run,    # complete median run
-                            'v_top1_himax_run': v_himax_run,    # complete best run (highest max)
-                            'v_top1_lomax_run': v_lomax_run,    # complete worst run (lowest max)
-                            'v_top1_mean_run': v_mean_run,        # complete mean run
-                            'v_top1_std_run': v_std_run,        # complete std around mean run
-                            'v_top1_var_run': v_var_run,        # complete var around mean run
+                            'v_top1_median_run': v_median_run, # complete median run
+                            'v_top1_himax_run': v_himax_run, # complete best run (highest max)
+                            'v_top1_lomax_run': v_lomax_run, # complete worst run (lowest max)
+                            'v_top1_mean_run': v_mean_run, # complete mean run
+                            'v_top1_var_run': v_var_run, # complete var around mean run
+                            'v_top1_std_run': v_std_run, # complete std around mean run
 
                             # test loss main
                             'test_loss_list': test_loss_store,
@@ -1582,6 +1630,7 @@ def __spec_analysis(TaskSettings, Paths, spec_name, spec_path, axis_2='af_weight
                             'test_top1_mean': np.mean(test_top1_store),
                             'test_top1_var': np.var(test_top1_store),
                             'test_top1_std': np.std(test_top1_store),
+                            'test_top1_standard_error': np.std(test_top1_store)/np.sqrt(n_runs), # standard error of the mean (SEM)
 
                             # early stopping minibatches
                             'test_mb_n_hist': test_mb_n_hist_store,
