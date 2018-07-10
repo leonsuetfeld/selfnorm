@@ -36,7 +36,7 @@ os.system("nvidia-smi")
 
 command = "python3 "                + 'deepnet_main.py' + \
           " -path_relative "        + './' + \
-          " -experiment_name="      + 'selfnorm_smcn_ABU_comparison' + \
+          " -experiment_name="      + 'smcn_ABUsoft_comparison_BN' + \
           " -mode="                 + 'analysis' + \
           " -task="                 + 'cifar100'
 subprocess.run(command, shell=True)
