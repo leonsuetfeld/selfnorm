@@ -1392,7 +1392,7 @@ def analysis(TaskSettings, Paths, make_plot=True, make_hrtf=True):
     # HUMAN READABLE TEXT FILE:
     if make_hrtf:
         savepath = Paths.analysis
-        hrtf_filename = 'main_performance_analysis.csv'
+        hrtf_filename = 'result_table_'+TaskSettings.experiment_name+'.csv'
         with open(savepath+hrtf_filename, 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=';', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             writer.writerow([experiment_name,
